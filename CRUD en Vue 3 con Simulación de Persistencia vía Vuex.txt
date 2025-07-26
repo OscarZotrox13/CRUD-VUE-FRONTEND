@@ -1,0 +1,408 @@
+src/store/modules/clients.js
+
+const state = {
+  clients: JSON.parse(localStorage.getItem('clients')) || []
+};
+
+const mutations = {
+  ADD_CLIENT(state, client) {
+    const newClient = {
+      ...client,
+      id: Date.now() // ID único
+    };
+    state.clients.push(newClient);
+    localStorage.setItem('clients', JSON.stringify(state.clients));
+  },
+  
+  UPDATE_CLIENT(state, updatedClient) {
+    const index = state.clients.findIndex(c => c.id === updatedClient.id);
+    if (index !== -1) {
+      state.clients.splice(index, 1, updatedClient);
+      localStorage.setItem('clients', JSON.stringify(state.clients));
+    }
+  },
+  
+  DELETE_CLIENT(state, id) {
+    state.clients = state.clients.filter(client => client.id !== id);
+    localStorage.setItem('clients', JSON.stringify(state.clients));
+  }
+};
+
+const actions = {
+  addClient({ commit }, client) {
+    commit('ADD_CLIENT', client);
+  },
+  
+  updateClient({ commit }, client) {
+    commit('UPDATE_CLIENT', client);
+  },
+  
+  deleteClient({ commit }, id) {
+    commit('DELETE_CLIENT', id);
+  }
+};
+
+const getters = {
+  allClients: state => state.clients,
+  getClientById: state => id => state.clients.find(c => c.id === id)
+};
+
+export default {
+  namespaced: true,
+  state,
+  mutations,
+  actions,
+  getters
+};
+
+
+
+src/store/index.js
+
+import { createStore } from 'vuex';
+import clients from './modules/clients';
+
+export default createStore({
+  modules: {
+    clients
+  }
+});
+
+
+
+src/router/index.js
+
+
+import { createRouter, createWebHistory } from 'vue-router';
+import ClientsView from '@/views/ClientsView.vue';
+
+const routes = [
+  {
+    path: '/',
+    name: 'clients',
+    component: ClientsView
+  },
+  {
+    path: '/create',
+    name: 'create',
+    component: () => import('@/views/CreateClient.vue')
+  },
+  {
+    path: '/edit/:id',
+    name: 'edit',
+    component: () => import('@/views/EditClient.vue'),
+    props: true
+  }
+];
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+});
+
+export default router;
+
+
+src/components/ClientForm.vue
+
+
+
+<template>
+  <v-form @submit.prevent="$emit('submit')">
+    <v-text-field
+      v-model="form.name"
+      label="Nombre"
+      :error-messages="errors.name"
+      required
+    ></v-text-field>
+    
+    <v-text-field
+      v-model="form.email"
+      label="Correo Electrónico"
+      type="email"
+      :error-messages="errors.email"
+      required
+    ></v-text-field>
+    
+    <v-text-field
+      v-model="form.phone"
+      label="Teléfono"
+      :error-messages="errors.phone"
+    ></v-text-field>
+    
+    <v-btn type="submit" color="primary" class="mr-4">
+      Guardar
+    </v-btn>
+    
+    <v-btn color="secondary" @click="$router.push('/')">
+      Cancelar
+    </v-btn>
+  </v-form>
+</template>
+
+<script setup>
+import { reactive, watch } from 'vue';
+
+const props = defineProps({
+  client: {
+    type: Object,
+    default: () => ({ name: '', email: '', phone: '' })
+  },
+  errors: {
+    type: Object,
+    default: () => ({})
+  }
+});
+
+const emit = defineEmits(['update:modelValue', 'submit']);
+
+const form = reactive({ ...props.client });
+
+// Actualizar formulario cuando cambie el cliente
+watch(() => props.client, (newClient) => {
+  Object.assign(form, newClient);
+}, { deep: true });
+
+// Emitir cambios
+watch(form, (newValue) => {
+  emit('update:modelValue', newValue);
+});
+</script>
+
+
+src/views/ClientsView.vue
+
+<template>
+  <v-container>
+    <v-row>
+      <v-col cols="12">
+        <v-btn color="primary" @click="goToCreate" class="mb-4">
+          <v-icon left>mdi-plus</v-icon>
+          Nuevo Cliente
+        </v-btn>
+        
+        <v-card>
+          <v-card-title class="headline">
+            Lista de Clientes
+          </v-card-title>
+          
+          <v-card-text>
+            <v-alert
+              v-if="clients.length === 0"
+              type="info"
+            >
+              No hay clientes registrados
+            </v-alert>
+            
+            <v-table v-else>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Email</th>
+                  <th>Teléfono</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="client in clients" :key="client.id">
+                  <td>{{ client.name }}</td>
+                  <td>{{ client.email }}</td>
+                  <td>{{ client.phone }}</td>
+                  <td>
+                    <v-btn
+                      icon
+                      color="primary"
+                      @click="editClient(client.id)"
+                    >
+                      <v-icon>mdi-pencil</v-icon>
+                    </v-btn>
+                    
+                    <v-btn
+                      icon
+                      color="error"
+                      @click="deleteClient(client.id)"
+                      class="ml-2"
+                    >
+                      <v-icon>mdi-delete</v-icon>
+                    </v-btn>
+                  </td>
+                </tr>
+              </tbody>
+            </v-table>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
+</template>
+
+<script setup>
+import { computed } from 'vue';
+import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
+
+const store = useStore();
+const router = useRouter();
+
+const clients = computed(() => store.getters['clients/allClients']);
+
+const goToCreate = () => {
+  router.push('/create');
+};
+
+const editClient = (id) => {
+  router.push({ name: 'edit', params: { id } });
+};
+
+const deleteClient = (id) => {
+  if (confirm('¿Estás seguro de eliminar este cliente?')) {
+    store.dispatch('clients/deleteClient', id);
+  }
+};
+</script>
+
+
+src/views/CreateClient.vue
+
+
+<template>
+  <v-container>
+    <v-row>
+      <v-col cols="12">
+        <v-card>
+          <v-card-title>Crear Nuevo Cliente</v-card-title>
+          <v-card-text>
+            <ClientForm
+              v-model:modelValue="form"
+              :errors="errors"
+              @submit="createClient"
+            />
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
+</template>
+
+<script setup>
+import { reactive } from 'vue';
+import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
+import ClientForm from '@/components/ClientForm.vue';
+
+const store = useStore();
+const router = useRouter();
+
+const form = reactive({
+  name: '',
+  email: '',
+  phone: ''
+});
+
+const errors = reactive({});
+
+const createClient = () => {
+  // Resetear errores
+  Object.keys(errors).forEach(key => delete errors[key]);
+  
+  // Validación
+  let isValid = true;
+  
+  if (!form.name.trim()) {
+    errors.name = 'El nombre es obligatorio';
+    isValid = false;
+  }
+  
+  if (!form.email.trim()) {
+    errors.email = 'El email es obligatorio';
+    isValid = false;
+  } else if (!isValidEmail(form.email)) {
+    errors.email = 'Email inválido';
+    isValid = false;
+  }
+  
+  if (isValid) {
+    store.dispatch('clients/addClient', form);
+    router.push('/');
+  }
+};
+
+const isValidEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+};
+</script>
+
+
+src/views/EditClient.vue
+
+<template>
+  <v-container>
+    <v-row>
+      <v-col cols="12">
+        <v-card>
+          <v-card-title>Editar Cliente</v-card-title>
+          <v-card-text>
+            <ClientForm
+              v-model:modelValue="form"
+              :errors="errors"
+              @submit="updateClient"
+            />
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
+</template>
+
+<script setup>
+import { computed, reactive } from 'vue';
+import { useStore } from 'vuex';
+import { useRoute, useRouter } from 'vue-router';
+import ClientForm from '@/components/ClientForm.vue';
+
+const store = useStore();
+const route = useRoute();
+const router = useRouter();
+
+const clientId = Number(route.params.id);
+const client = computed(() => 
+  store.getters['clients/getClientById'](clientId)
+);
+
+const form = reactive({ ...client.value });
+
+const errors = reactive({});
+
+const updateClient = () => {
+  // Resetear errores
+  Object.keys(errors).forEach(key => delete errors[key]);
+  
+  // Validación
+  let isValid = true;
+  
+  if (!form.name.trim()) {
+    errors.name = 'El nombre es obligatorio';
+    isValid = false;
+  }
+  
+  if (!form.email.trim()) {
+    errors.email = 'El email es obligatorio';
+    isValid = false;
+  } else if (!isValidEmail(form.email)) {
+    errors.email = 'Email inválido';
+    isValid = false;
+  }
+  
+  if (isValid) {
+    store.dispatch('clients/updateClient', form);
+    router.push('/');
+  }
+};
+
+const isValidEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+};
+</script>
+
